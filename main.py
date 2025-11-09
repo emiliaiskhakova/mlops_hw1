@@ -66,11 +66,11 @@ def prepare_date(data, y):
 
 def trainer(df, y, model_name, hyperparams: dict):
     """Обучение модели"""
-    df, y= prepare_date(df, y)
+    df, y = prepare_date(df, y)
 
     if model_name not in dict_model:
         raise ValueError(f"Model {model_name} is not available")
- 
+
     if model_name in ['LinearRegression', 'RandomForestRegressor']:
         df_train, df_test, y_train, y_test = train_test_split(df, y, test_size=0.2, random_state=42, stratify=None)
     else:
@@ -84,7 +84,7 @@ def trainer(df, y, model_name, hyperparams: dict):
     y_pred = model.predict(df_test)
     if model_name in ['LinearRegression', 'RandomForestRegressor']:
         y_pred_proba = None
-    else: 
+    else:
         y_pred_proba = model.predict_proba(df_test)[:, 1]
     return model, y_pred, y_test, y_pred_proba
 
@@ -92,22 +92,28 @@ def trainer(df, y, model_name, hyperparams: dict):
 def calculate_metrics(model_name, y_test, y_pred, y_pred_proba):
     """Возвращает предсказания и метрики"""
     y_pred_list = y_pred.tolist()
+
+    def round_metric(value):
+        if value is None:
+            return None
+        return round(float(value), 4)
+
     if model_name in ['LinearRegression', 'RandomForestRegressor']:
         return {
-            "prediction": y_pred_list, 
-            "r2_score": r2_score(y_test, y_pred),
-            "mean_squared_error": mean_squared_error(y_test, y_pred)
+            # "prediction": y_pred_list,
+            "r2_score": round_metric(r2_score(y_test, y_pred)),
+            "mean_squared_error": round_metric(mean_squared_error(y_test, y_pred))
         }
     else:
         try:
-            roc_auc = roc_auc_score(y_test, y_pred_proba)
+            roc_auc = round_metric(roc_auc_score(y_test, y_pred_proba))
         except ValueError:
             roc_auc = None
 
         return {
-            "prediction": y_pred_list, 
-            "accuracy": accuracy_score(y_test, y_pred),
-            "f1_score": f1_score(y_test, y_pred, average='weighted'),
+            # "prediction": y_pred_list,
+            "accuracy": round_metric(accuracy_score(y_test, y_pred)),
+            "f1_score": round_metric(f1_score(y_test, y_pred, average='weighted')),
             "roc_auc": roc_auc
         }
 
@@ -115,7 +121,9 @@ def calculate_metrics(model_name, y_test, y_pred, y_pred_proba):
 # FastAPI часть
 # -----------------------------------
 
-app = FastAPI(title="ML Training API", description="API для обучения ML-модель с возможностью настройки гиперпараметров", version="1.0")
+app = FastAPI(title="ML Training API",
+              description="API для обучения ML-модель с возможностью настройки гиперпараметров", version="1.0")
+
 
 class TrainRequest(BaseModel):
     model_name: str
@@ -131,6 +139,7 @@ class PredictRequest(BaseModel):
 class RetrainRequest(BaseModel):
     model_id: str
     data: Dict[str, Any]
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -163,7 +172,7 @@ async def train_model(request: TrainRequest):
     try:
         model, y_pred, y_test, y_pred_proba = trainer(
             request.data,
-            None,  
+            None,
             request.model_name,
             request.hyperparams
         )
@@ -272,7 +281,7 @@ async def retrain_model(model_id: str, request: RetrainRequest):
         return {
             "model_id": model_id,
             "model_name": model_name,
-            "hyperparams": model_info["hyperparams"],  
+            "hyperparams": model_info["hyperparams"],
             "training_time": datetime.now(),
             "metrics": metrics_result,
             "message": "Model retrained successfully"
